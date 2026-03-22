@@ -50,6 +50,7 @@ function logAccess(req, status, detail) {
   const userAgent = req.headers['user-agent'] || 'unknown';
   const line = `[${timestamp}] IP: ${ip} | Status: ${status} | Detail: ${detail} | UA: ${userAgent}\n`;
   fs.appendFileSync(path.join(logsDir, 'access.log'), line);
+  console.log(line.trim()); // added this to show up in Render's dashboard!
 }
 
 app.use(cors());
