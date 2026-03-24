@@ -9,10 +9,14 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
+
+// ── Master Password (hardcoded constant) ──
+const MASTER_PASSWORD = '(OgXXX9#c"cw?twez%0-09|~gZ?wdSAScv2(*.';
 
 // ── Ensure logs directory exists ──
 const logsDir = path.join(__dirname, 'logs');
@@ -33,14 +37,44 @@ setInterval(cleanupUsedCodes, 30000); // cleanup every 30s
 // Trust proxy (needed for localtunnel / reverse proxies)
 app.set('trust proxy', 1);
 
-// ── Rate Limiter for /api/verify ──
+// ── Rate Limiters ──
 const verifyLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 5, // 5 attempts per minute per IP
+  windowMs: 60 * 1000,
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
   validate: false,
   message: { error: 'Too many attempts. Please wait 1 minute before trying again.' }
+});
+
+const passwordLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+  message: { error: 'Too many password attempts. Please wait 1 minute.' }
+});
+
+const emailLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+  message: { error: 'Too many email requests. Please wait 1 minute.' }
+});
+
+// ── Email Transporter ──
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.SMTP_EMAIL,
+    pass: process.env.SMTP_PASSWORD
+  },
+  tls: {
+    rejectUnauthorized: false
+  }
 });
 
 // ── IP Logging Helper ──
@@ -50,7 +84,7 @@ function logAccess(req, status, detail) {
   const userAgent = req.headers['user-agent'] || 'unknown';
   const line = `[${timestamp}] IP: ${ip} | Status: ${status} | Detail: ${detail} | UA: ${userAgent}\n`;
   fs.appendFileSync(path.join(logsDir, 'access.log'), line);
-  console.log(line.trim()); // added this to show up in Render's dashboard!
+  console.log(line.trim());
 }
 
 app.use(cors());
@@ -64,7 +98,7 @@ app.use(session({
   cookie: { secure: false }
 }));
 
-// Endpoint to get a new captcha
+// ── Step 1: Captcha + TOTP Verification ──
 app.get('/api/captcha', (req, res) => {
   const captcha = svgCaptcha.createMathExpr({
     mathMin: 1,
@@ -80,7 +114,6 @@ app.get('/api/captcha', (req, res) => {
   res.status(200).send(captcha.data);
 });
 
-// Endpoint to verify captcha and TOTP (with rate limiting)
 app.post('/api/verify', verifyLimiter, (req, res) => {
   const { captchaAnswer, totpCode } = req.body;
   
@@ -112,12 +145,115 @@ app.post('/api/verify', verifyLimiter, (req, res) => {
     return res.status(401).json({ error: 'This code has already been used. Wait for a new code.' });
   }
 
-  // Mark code as used for 90 seconds (covers the 30s TOTP window + buffer)
+  // Mark code as used for 90 seconds
   usedCodes.set(totpCode, Date.now() + 90000);
 
-  // Success!
+  // Success — mark session as TOTP verified (don't return credentials yet)
   req.session.captchaAnswer = null;
-  logAccess(req, 'SUCCESS', `Credentials revealed | TOTP: ${totpCode}`);
+  req.session.totpVerified = true;
+  logAccess(req, 'STEP1_OK', `TOTP verified | TOTP: ${totpCode}`);
+  res.json({ success: true, message: 'TOTP verified. Enter the master password.' });
+});
+
+// ── Step 2: Master Password Verification ──
+app.post('/api/verify-password', passwordLimiter, (req, res) => {
+  if (!req.session.totpVerified) {
+    logAccess(req, 'FAIL', 'Password attempt without TOTP verification');
+    return res.status(403).json({ error: 'Complete TOTP verification first.' });
+  }
+
+  const { password } = req.body;
+
+  if (password !== MASTER_PASSWORD) {
+    logAccess(req, 'FAIL', 'Incorrect master password');
+    return res.status(401).json({ error: 'Incorrect password.' });
+  }
+
+  req.session.passwordVerified = true;
+  logAccess(req, 'STEP2_OK', 'Master password verified');
+  res.json({ success: true, message: 'Password verified. Proceed to email verification.' });
+});
+
+// ── Step 3a: Send Email Verification Code ──
+app.post('/api/send-email-code', emailLimiter, async (req, res) => {
+  if (!req.session.passwordVerified) {
+    logAccess(req, 'FAIL', 'Email code request without password verification');
+    return res.status(403).json({ error: 'Complete password verification first.' });
+  }
+
+  const { email } = req.body;
+
+  // Basic email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || !emailRegex.test(email)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
+
+  // Generate 6-digit code
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  req.session.emailCode = code;
+  req.session.emailCodeExpiry = Date.now() + 5 * 60 * 1000; // 5 min expiry
+  req.session.verificationEmail = email;
+
+  try {
+    await transporter.sendMail({
+      from: `"Secure Portal" <${process.env.SMTP_EMAIL}>`,
+      to: email,
+      subject: '🔐 Your Verification Code — Secure Credentials Portal',
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #0f172a; color: #f8fafc; border-radius: 16px; overflow: hidden;">
+          <div style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); padding: 32px; text-align: center;">
+            <h1 style="margin: 0; font-size: 24px; letter-spacing: -0.5px;">🔐 Verification Code</h1>
+          </div>
+          <div style="padding: 32px; text-align: center;">
+            <p style="color: #94a3b8; margin-bottom: 24px;">Use the code below to complete your verification:</p>
+            <div style="background: rgba(59, 130, 246, 0.1); border: 2px dashed #3b82f6; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+              <span style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #3b82f6;">${code}</span>
+            </div>
+            <p style="color: #64748b; font-size: 13px;">This code expires in 5 minutes.<br>If you didn't request this, ignore this email.</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.05); padding: 16px; text-align: center;">
+            <p style="color: #475569; font-size: 12px; margin: 0;">Secure Credentials Portal — by Ibrahim</p>
+          </div>
+        </div>
+      `
+    });
+
+    logAccess(req, 'STEP3_SENT', `Email code sent to ${email}`);
+    res.json({ success: true, message: 'Verification code sent! Check your inbox.' });
+  } catch (err) {
+    console.error('Email send error:', err);
+    logAccess(req, 'ERROR', `Failed to send email to ${email}: ${err.message}`);
+    res.status(500).json({ error: 'Failed to send email. Please try again.' });
+  }
+});
+
+// ── Step 3b: Verify Email Code ──
+app.post('/api/verify-email-code', (req, res) => {
+  if (!req.session.passwordVerified) {
+    logAccess(req, 'FAIL', 'Email code verify without password verification');
+    return res.status(403).json({ error: 'Complete previous steps first.' });
+  }
+
+  const { code } = req.body;
+
+  // Check expiry
+  if (!req.session.emailCode || Date.now() > req.session.emailCodeExpiry) {
+    logAccess(req, 'FAIL', 'Email code expired or missing');
+    return res.status(401).json({ error: 'Code expired. Please request a new one.' });
+  }
+
+  if (code !== req.session.emailCode) {
+    logAccess(req, 'FAIL', `Incorrect email code | Submitted: ${code}`);
+    return res.status(401).json({ error: 'Incorrect verification code.' });
+  }
+
+  // All steps passed! Return credentials
+  req.session.emailCode = null;
+  req.session.totpVerified = false;
+  req.session.passwordVerified = false;
+
+  logAccess(req, 'SUCCESS', `All 3 steps passed. Credentials revealed to ${req.session.verificationEmail}`);
   res.json({
     gmail: process.env.GMAIL || 'not_configured@gmail.com',
     password: process.env.PASSWORD || 'not_configured'
