@@ -50,11 +50,92 @@ body {
   border-radius: 24px;
   padding: 40px;
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   transition: all 0.4s ease;
 }
 
+/* ═══════════════════════════════════════ */
+/* STEP PROGRESS INDICATOR                */
+/* ═══════════════════════════════════════ */
+.step-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 32px;
+  gap: 0;
+}
+
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.step-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  transition: all 0.4s ease;
+}
+
+.step-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  transition: color 0.4s ease;
+}
+
+.step-item.active .step-circle {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: var(--primary);
+  color: var(--primary);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+}
+
+.step-item.active .step-label {
+  color: var(--primary);
+}
+
+.step-item.completed .step-circle {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.step-item.completed .step-label {
+  color: var(--success);
+}
+
+.step-line {
+  width: 32px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 4px;
+  margin-bottom: 18px;
+  border-radius: 1px;
+  transition: background 0.4s ease;
+}
+
+.step-line.completed {
+  background: linear-gradient(90deg, var(--success), var(--primary));
+}
+
+/* ═══════════════════════════════════════ */
+/* COMMON                                 */
+/* ═══════════════════════════════════════ */
 .header {
   text-align: center;
   margin-bottom: 30px;
@@ -126,6 +207,11 @@ input::placeholder {
   color: rgba(148, 163, 184, 0.4);
 }
 
+input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .captcha-container {
   display: flex;
   align-items: center;
@@ -171,6 +257,38 @@ input::placeholder {
   transform: scale(0.95);
 }
 
+/* Password input with toggle */
+.password-input-wrapper {
+  position: relative;
+}
+
+.password-input-wrapper input {
+  padding-right: 48px;
+}
+
+.pw-toggle-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pw-toggle-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Buttons */
 .btn-primary {
   width: 100%;
   padding: 14px;
@@ -191,17 +309,58 @@ input::placeholder {
 }
 
 .btn-primary:hover {
-  background: var(--primary-hover);
   transform: translateY(-2px);
   box-shadow: 0 10px 20px -10px rgba(59, 130, 246, 0.5);
+  filter: brightness(1.1);
 }
 
 .btn-primary:active {
   transform: translateY(0);
 }
 
+.btn-primary:disabled {
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-secondary {
+  width: 100%;
+  padding: 12px;
+  margin-top: 12px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Messages */
 .error-msg {
   color: var(--error);
+  font-size: 13px;
+  margin-bottom: 16px;
+  min-height: 20px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.success-msg {
+  color: var(--success);
   font-size: 13px;
   margin-bottom: 16px;
   min-height: 20px;
@@ -238,7 +397,15 @@ input::placeholder {
   100% { transform: rotate(360deg); }
 }
 
-/* Success Panel */
+/* Step slide-in animation */
+@keyframes stepSlideIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════ */
+/* SUCCESS PANEL                          */
+/* ═══════════════════════════════════════ */
 .success-panel {
   animation: fadeIn 0.5s ease-out forwards;
 }
@@ -402,7 +569,7 @@ code {
   transition: width 1s linear;
 }
 
-/* Signature piece */
+/* Signature */
 .signature {
   margin-top: 32px;
   padding-top: 16px;
@@ -420,7 +587,9 @@ code {
   letter-spacing: 1px;
 }
 
-/* Lockout Overlay */
+/* ═══════════════════════════════════════ */
+/* LOCKOUT OVERLAY                        */
+/* ═══════════════════════════════════════ */
 .lockout-overlay {
   position: fixed;
   top: 0;
