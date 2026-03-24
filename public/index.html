@@ -12,43 +12,149 @@
   <canvas id="particleCanvas"></canvas>
 
   <div class="container glass-panel" id="mainContainer">
-    <div class="header">
-      <div class="shield-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-          <path d="M12 8v4"></path>
-          <path d="M12 16h.01"></path>
-        </svg>
+    
+    <!-- Step Progress Indicator -->
+    <div class="step-progress" id="stepProgress">
+      <div class="step-item active" data-step="1">
+        <div class="step-circle">1</div>
+        <span class="step-label">Verify</span>
       </div>
-      <h1>Secure Access</h1>
-      <p>Verify your identity to access sensitive credentials.</p>
+      <div class="step-line"></div>
+      <div class="step-item" data-step="2">
+        <div class="step-circle">2</div>
+        <span class="step-label">Password</span>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item" data-step="3">
+        <div class="step-circle">3</div>
+        <span class="step-label">Email</span>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item" data-step="4">
+        <div class="step-circle">4</div>
+        <span class="step-label">Access</span>
+      </div>
     </div>
 
-    <form id="verifyForm">
-      <div class="form-group">
-        <label>Bot Verification</label>
-        <div class="captcha-container">
-          <div id="captchaImage" class="captcha-box"></div>
-          <button type="button" id="refreshCaptcha" class="icon-btn" title="Refresh Captcha">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-          </button>
+    <!-- ═══════ STEP 1: Captcha + TOTP ═══════ -->
+    <div id="step1Panel">
+      <div class="header">
+        <div class="shield-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            <path d="M12 8v4"></path>
+            <path d="M12 16h.01"></path>
+          </svg>
         </div>
-        <input type="text" id="captchaAnswer" placeholder="Solve the math expression" required autocomplete="off">
+        <h1>Secure Access</h1>
+        <p>Verify your identity to access sensitive credentials.</p>
       </div>
 
-      <div class="form-group">
-        <label>Authenticator Code (6-digit)</label>
-        <input type="text" id="totpCode" placeholder="000000" maxlength="6" pattern="\d{6}" required autocomplete="off" inputmode="numeric">
+      <form id="verifyForm">
+        <div class="form-group">
+          <label>Bot Verification</label>
+          <div class="captcha-container">
+            <div id="captchaImage" class="captcha-box"></div>
+            <button type="button" id="refreshCaptcha" class="icon-btn" title="Refresh Captcha">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            </button>
+          </div>
+          <input type="text" id="captchaAnswer" placeholder="Solve the math expression" required autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label>Authenticator Code (6-digit)</label>
+          <input type="text" id="totpCode" placeholder="000000" maxlength="6" pattern="\d{6}" required autocomplete="off" inputmode="numeric">
+        </div>
+
+        <p id="errorMessage" class="error-msg"></p>
+
+        <button type="submit" id="submitBtn" class="btn-primary">
+          <span class="btn-text">Verify Identity</span>
+          <div class="loader hidden"></div>
+        </button>
+      </form>
+    </div>
+
+    <!-- ═══════ STEP 2: Master Password ═══════ -->
+    <div id="step2Panel" class="hidden">
+      <div class="header">
+        <div class="shield-icon" style="background: rgba(168, 85, 247, 0.1); color: #a855f7;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <h1>Master Password</h1>
+        <p>Enter the master password to continue.</p>
       </div>
 
-      <p id="errorMessage" class="error-msg"></p>
+      <form id="passwordForm">
+        <div class="form-group">
+          <label>Master Password</label>
+          <div class="password-input-wrapper">
+            <input type="password" id="masterPasswordInput" placeholder="Enter master password" required autocomplete="off">
+            <button type="button" id="toggleMasterPw" class="pw-toggle-btn" title="Show/Hide">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+          </div>
+        </div>
 
-      <button type="submit" id="submitBtn" class="btn-primary">
-        <span class="btn-text">Unlock Credentials</span>
-        <div class="loader hidden"></div>
-      </button>
-    </form>
+        <p id="passwordError" class="error-msg"></p>
 
+        <button type="submit" id="passwordSubmitBtn" class="btn-primary" style="background: #a855f7;">
+          <span class="btn-text">Unlock</span>
+          <div class="loader hidden"></div>
+        </button>
+      </form>
+    </div>
+
+    <!-- ═══════ STEP 3: Email Verification ═══════ -->
+    <div id="step3Panel" class="hidden">
+      <div class="header">
+        <div class="shield-icon" style="background: rgba(236, 72, 153, 0.1); color: #ec4899;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+            <polyline points="22,6 12,13 2,6"></polyline>
+          </svg>
+        </div>
+        <h1>Email Verification</h1>
+        <p>Enter your email to receive a verification code.</p>
+      </div>
+
+      <form id="emailForm">
+        <div class="form-group">
+          <label>Your Email Address</label>
+          <input type="email" id="emailInput" placeholder="your@email.com" required autocomplete="email">
+        </div>
+
+        <p id="emailSendError" class="error-msg"></p>
+        <p id="emailSendSuccess" class="success-msg hidden"></p>
+
+        <button type="submit" id="sendCodeBtn" class="btn-primary" style="background: #ec4899;">
+          <span class="btn-text">Send Code</span>
+          <div class="loader hidden"></div>
+        </button>
+      </form>
+
+      <form id="codeForm" class="hidden" style="margin-top: 24px;">
+        <div class="form-group">
+          <label>Verification Code (6-digit)</label>
+          <input type="text" id="emailCodeInput" placeholder="000000" maxlength="6" pattern="\d{6}" required autocomplete="off" inputmode="numeric">
+        </div>
+
+        <p id="codeError" class="error-msg"></p>
+
+        <button type="submit" id="verifyCodeBtn" class="btn-primary" style="background: #ec4899;">
+          <span class="btn-text">Verify Code</span>
+          <div class="loader hidden"></div>
+        </button>
+
+        <button type="button" id="resendCodeBtn" class="btn-secondary">Resend Code</button>
+      </form>
+    </div>
+
+    <!-- ═══════ STEP 4: Success / Credentials ═══════ -->
     <div id="successPanel" class="success-panel hidden">
       <div class="success-icon">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
