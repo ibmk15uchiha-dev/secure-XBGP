@@ -34,6 +34,19 @@ function cleanupUsedCodes() {
 }
 setInterval(cleanupUsedCodes, 30000); // cleanup every 30s
 
+// ── One-Time Email: Track emails that already accessed credentials (persisted) ──
+const usedEmailsFile = path.join(logsDir, 'used_emails.json');
+let usedEmails = new Set();
+try {
+  if (fs.existsSync(usedEmailsFile)) {
+    usedEmails = new Set(JSON.parse(fs.readFileSync(usedEmailsFile, 'utf-8')));
+  }
+} catch (e) { /* ignore corrupt file */ }
+
+function saveUsedEmails() {
+  fs.writeFileSync(usedEmailsFile, JSON.stringify([...usedEmails], null, 2));
+}
+
 // Trust proxy (needed for localtunnel / reverse proxies)
 app.set('trust proxy', 1);
 
@@ -62,7 +75,9 @@ const emailLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   validate: false,
-  message: { error: 'Too many email requests. Please wait 1 minute.' }
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Too many email requests. Please wait 1 minute.' });
+  }
 });
 
 // ── Email Transporter ──
@@ -189,6 +204,12 @@ app.post('/api/send-email-code', emailLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Please enter a valid email address.' });
   }
 
+  // One-time email: check if this email was already used
+  if (usedEmails.has(email.toLowerCase())) {
+    logAccess(req, 'FAIL', `Email already used: ${email}`);
+    return res.status(403).json({ error: 'This email has already been used to access credentials.' });
+  }
+
   // Generate 6-digit code
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   req.session.emailCode = code;
@@ -248,12 +269,15 @@ app.post('/api/verify-email-code', (req, res) => {
     return res.status(401).json({ error: 'Incorrect verification code.' });
   }
 
-  // All steps passed! Return credentials
+  // All steps passed! Mark email as used and return credentials
+  const verifiedEmail = req.session.verificationEmail;
+  usedEmails.add(verifiedEmail.toLowerCase());
+  saveUsedEmails();
   req.session.emailCode = null;
   req.session.totpVerified = false;
   req.session.passwordVerified = false;
 
-  logAccess(req, 'SUCCESS', `All 3 steps passed. Credentials revealed to ${req.session.verificationEmail}`);
+  logAccess(req, 'SUCCESS', `All 3 steps passed. Credentials revealed to ${verifiedEmail}`);
   res.json({
     gmail: process.env.GMAIL || 'not_configured@gmail.com',
     password: process.env.PASSWORD || 'not_configured'
