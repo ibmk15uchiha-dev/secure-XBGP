@@ -9,7 +9,6 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
-const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -77,21 +76,6 @@ const emailLimiter = rateLimit({
   validate: false,
   handler: (req, res) => {
     res.status(429).json({ error: 'Too many email requests. Please wait 1 minute.' });
-  }
-});
-
-// ── Email Transporter ──
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // upgrades to TLS automatically via STARTTLS
-  family: 4, // Force IPv4 routing (fixes Render timeouts)
-  auth: {
-    user: process.env.SMTP_EMAIL,
-    pass: process.env.SMTP_PASSWORD
-  },
-  tls: {
-    rejectUnauthorized: false
   }
 });
 
@@ -220,30 +204,33 @@ app.post('/api/send-email-code', emailLimiter, async (req, res) => {
   req.session.verificationEmail = email;
 
   try {
-    await transporter.sendMail({
-      from: `"Secure Portal" <${process.env.SMTP_EMAIL}>`,
-      to: email,
-      subject: '🔐 Your Verification Code — Secure Credentials Portal',
-      html: `
-        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #0f172a; color: #f8fafc; border-radius: 16px; overflow: hidden;">
-          <div style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); padding: 32px; text-align: center;">
-            <h1 style="margin: 0; font-size: 24px; letter-spacing: -0.5px;">🔐 Verification Code</h1>
-          </div>
-          <div style="padding: 32px; text-align: center;">
-            <p style="color: #94a3b8; margin-bottom: 24px;">Use the code below to complete your verification:</p>
-            <div style="background: rgba(59, 130, 246, 0.1); border: 2px dashed #3b82f6; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-              <span style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #3b82f6;">${code}</span>
+    const response = await fetch(process.env.GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: email,
+        subject: '🔐 Your Verification Code — Secure Credentials Portal',
+        htmlBody: `
+          <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #0f172a; color: #f8fafc; border-radius: 16px; overflow: hidden;">
+            <div style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); padding: 32px; text-align: center;">
+              <h2 style="margin: 0; color: #ffffff; font-size: 24px;">Verification Required</h2>
             </div>
-            <p style="color: #64748b; font-size: 13px;">This code expires in 5 minutes.<br>If you didn't request this, ignore this email.</p>
+            <div style="padding: 32px; background: #1e293b;">
+              <p style="font-size: 16px; color: #cbd5e1; line-height: 1.5;">You requested access to the secure credentials portal. Please use the following 6-digit verification code to proceed:</p>
+              <div style="background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; text-align: center; margin: 24px 0;">
+                <span style="font-family: monospace; font-size: 32px; font-weight: bold; color: #38bdf8; letter-spacing: 4px;">${code}</span>
+              </div>
+              <p style="font-size: 14px; color: #94a3b8; text-align: center; margin-bottom: 0;">This code expires in 5 minutes.</p>
+            </div>
           </div>
-          <div style="background: rgba(255,255,255,0.05); padding: 16px; text-align: center;">
-            <p style="color: #475569; font-size: 12px; margin: 0;">Secure Credentials Portal — by Ibrahim</p>
-          </div>
-        </div>
-      `
+        `
+      })
     });
 
-    logAccess(req, 'STEP3_SENT', `Email code sent to ${email}`);
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+
+    logAccess(req, 'STEP3_SENT', `Email code sent to ${email} (via App Script)`);
     res.json({ success: true, message: 'Verification code sent! Check your inbox.' });
   } catch (err) {
     console.error('Email send error:', err);
