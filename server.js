@@ -83,8 +83,8 @@ const emailLimiter = rateLimit({
 // ── Email Transporter ──
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
+  port: 587,
+  secure: false, // upgrades to TLS automatically via STARTTLS
   family: 4, // Force IPv4 routing (fixes Render timeouts)
   auth: {
     user: process.env.SMTP_EMAIL,
