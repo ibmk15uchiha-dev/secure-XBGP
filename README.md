@@ -66,9 +66,6 @@ node server.js
 \`\`\`
 
 The portal is now running locally!
-- HTTP: \`http://localhost:3000\`
-- HTTPS: \`https://localhost:3443\`
-
 ---
 
 ## ☁️ Deploying to Render (24/7 Cloud)
