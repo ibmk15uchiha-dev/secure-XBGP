@@ -83,3 +83,5 @@ The portal is now running locally!
 
 ---
 *Built tightly for personal remote credential sharing.*
+----------------
+Credits to @ibmk15uchiha-dev (me)
