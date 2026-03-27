@@ -23,16 +23,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Step 3 elements
   const step3Panel = document.getElementById('step3Panel');
-  const emailForm = document.getElementById('emailForm');
-  const emailInput = document.getElementById('emailInput');
-  const emailSendError = document.getElementById('emailSendError');
-  const emailSendSuccess = document.getElementById('emailSendSuccess');
-  const sendCodeBtn = document.getElementById('sendCodeBtn');
-  const codeForm = document.getElementById('codeForm');
-  const emailCodeInput = document.getElementById('emailCodeInput');
-  const codeError = document.getElementById('codeError');
-  const verifyCodeBtn = document.getElementById('verifyCodeBtn');
-  const resendCodeBtn = document.getElementById('resendCodeBtn');
+  const warningForm = document.getElementById('warningForm');
+  const warningTimer = document.getElementById('warningTimer');
+  const understandCheckbox = document.getElementById('understandCheckbox');
+  const understandLabel = document.getElementById('understandLabel');
+  const proceedBtn = document.getElementById('proceedBtn');
+  const warningError = document.getElementById('warningError');
 
   // Step 4 elements
   const successPanel = document.getElementById('successPanel');
@@ -180,6 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Password verified! Move to step 3
       goToStep(3);
+      startWarningTimer();
 
     } catch (err) {
       passwordError.textContent = err.message;
@@ -190,91 +187,59 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ═══════════════════════════════════════
-  // STEP 3: Email Verification
+  // STEP 3: Warning
   // ═══════════════════════════════════════
-  emailForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    emailSendError.textContent = '';
-    emailSendSuccess.classList.add('hidden');
-
-    const email = emailInput.value;
-    setLoading(sendCodeBtn, true);
-
-    try {
-      const response = await fetch('/api/send-email-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to send code');
-
-      // Code sent! Show the code input form
-      emailSendSuccess.textContent = `✅ Code sent to ${email}! Check your inbox.`;
-      emailSendSuccess.classList.remove('hidden');
-      codeForm.classList.remove('hidden');
-      emailInput.disabled = true;
-      sendCodeBtn.disabled = true;
-      sendCodeBtn.style.opacity = '0.5';
-
-    } catch (err) {
-      emailSendError.textContent = err.message;
-      shakeContainer();
-    } finally {
-      setLoading(sendCodeBtn, false);
-    }
-  });
-
-  // Resend code
-  resendCodeBtn.addEventListener('click', async () => {
-    emailSendError.textContent = '';
-    codeError.textContent = '';
-    emailSendSuccess.classList.add('hidden');
+  let warningTimerInterval;
+  
+  function startWarningTimer() {
+    let timeLeft = 10;
+    warningTimer.textContent = timeLeft;
+    understandCheckbox.disabled = true;
+    understandCheckbox.checked = false;
+    understandCheckbox.style.cursor = 'not-allowed';
+    understandLabel.style.cursor = 'not-allowed';
+    proceedBtn.disabled = true;
+    proceedBtn.style.opacity = '0.5';
     
-    const email = emailInput.value;
-    resendCodeBtn.disabled = true;
-    resendCodeBtn.textContent = 'Sending...';
+    clearInterval(warningTimerInterval);
+    warningTimerInterval = setInterval(() => {
+      timeLeft--;
+      warningTimer.textContent = timeLeft;
+      
+      if (timeLeft <= 0) {
+        clearInterval(warningTimerInterval);
+        warningTimer.textContent = '0';
+        understandCheckbox.disabled = false;
+        understandCheckbox.style.cursor = 'pointer';
+        understandLabel.style.cursor = 'pointer';
+        
+        understandCheckbox.addEventListener('change', () => {
+          if (understandCheckbox.checked) {
+            proceedBtn.disabled = false;
+            proceedBtn.style.opacity = '1';
+          } else {
+            proceedBtn.disabled = true;
+            proceedBtn.style.opacity = '0.5';
+          }
+        });
+      }
+    }, 1000);
+  }
 
-    try {
-      const response = await fetch('/api/send-email-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to resend code');
-
-      emailSendSuccess.textContent = `✅ New code sent to ${email}!`;
-      emailSendSuccess.classList.remove('hidden');
-      emailCodeInput.value = '';
-
-    } catch (err) {
-      codeError.textContent = err.message;
-    } finally {
-      resendCodeBtn.disabled = false;
-      resendCodeBtn.textContent = 'Resend Code';
-    }
-  });
-
-  // Verify email code
-  codeForm.addEventListener('submit', async (e) => {
+  warningForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    codeError.textContent = '';
+    warningError.textContent = '';
 
-    const code = emailCodeInput.value;
-    setLoading(verifyCodeBtn, true);
+    setLoading(proceedBtn, true);
 
     try {
-      const response = await fetch('/api/verify-email-code', {
+      const response = await fetch('/api/get-credentials', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
+        headers: { 'Content-Type': 'application/json' }
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Invalid code');
+      if (!response.ok) throw new Error(data.error || 'Failed to retrieve credentials');
 
       // ALL STEPS COMPLETE — show credentials!
       displayEmail.textContent = data.gmail;
@@ -289,10 +254,10 @@ document.addEventListener('DOMContentLoaded', () => {
       startExpiryTimer();
 
     } catch (err) {
-      codeError.textContent = err.message;
+      warningError.textContent = err.message;
       shakeContainer();
     } finally {
-      setLoading(verifyCodeBtn, false);
+      setLoading(proceedBtn, false);
     }
   });
 
