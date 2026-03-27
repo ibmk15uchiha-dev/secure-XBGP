@@ -27,7 +27,7 @@
       <div class="step-line"></div>
       <div class="step-item" data-step="3">
         <div class="step-circle">3</div>
-        <span class="step-label">Email</span>
+        <span class="step-label">Warning</span>
       </div>
       <div class="step-line"></div>
       <div class="step-item" data-step="4">
@@ -109,48 +109,36 @@
       </form>
     </div>
 
-    <!-- ═══════ STEP 3: Email Verification ═══════ -->
+    <!-- ═══════ STEP 3: Warning ═══════ -->
     <div id="step3Panel" class="hidden">
       <div class="header">
-        <div class="shield-icon" style="background: rgba(236, 72, 153, 0.1); color: #ec4899;">
+        <div class="shield-icon" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-            <polyline points="22,6 12,13 2,6"></polyline>
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
         </div>
-        <h1>Email Verification</h1>
-        <p>Enter your email to receive a verification code.</p>
+        <h1 style="color: #ef4444;">Sensitive Information</h1>
+        <p>You are about to reveal highly sensitive credentials. Do not share this information with anyone.</p>
       </div>
 
-      <form id="emailForm">
-        <div class="form-group">
-          <label>Your Email Address</label>
-          <input type="email" id="emailInput" placeholder="your@email.com" required autocomplete="email">
+      <div class="warning-box" style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 16px; margin-bottom: 24px; text-align: center;">
+        <p style="color: #fca5a5; margin: 0; font-size: 14px;">Please wait <span id="warningTimer" style="font-weight: bold; color: #ef4444; font-size: 18px;">10</span> seconds to proceed.</p>
+      </div>
+
+      <form id="warningForm">
+        <div class="form-group checkbox-group" style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 24px;">
+          <input type="checkbox" id="understandCheckbox" disabled style="margin-top: 4px; width: 18px; height: 18px; accent-color: #ef4444; cursor: not-allowed;">
+          <label for="understandCheckbox" style="margin: 0; color: #cbd5e1; font-size: 14px; cursor: not-allowed;" id="understandLabel">I understand, do not show this to anyone.</label>
         </div>
 
-        <p id="emailSendError" class="error-msg"></p>
-        <p id="emailSendSuccess" class="success-msg hidden"></p>
+        <p id="warningError" class="error-msg"></p>
 
-        <button type="submit" id="sendCodeBtn" class="btn-primary" style="background: #ec4899;">
-          <span class="btn-text">Send Code</span>
+        <button type="submit" id="proceedBtn" class="btn-primary" style="background: #ef4444; opacity: 0.5;" disabled>
+          <span class="btn-text">Reveal Credentials</span>
           <div class="loader hidden"></div>
         </button>
-      </form>
-
-      <form id="codeForm" class="hidden" style="margin-top: 24px;">
-        <div class="form-group">
-          <label>Verification Code (6-digit)</label>
-          <input type="text" id="emailCodeInput" placeholder="000000" maxlength="6" pattern="\d{6}" required autocomplete="off" inputmode="numeric">
-        </div>
-
-        <p id="codeError" class="error-msg"></p>
-
-        <button type="submit" id="verifyCodeBtn" class="btn-primary" style="background: #ec4899;">
-          <span class="btn-text">Verify Code</span>
-          <div class="loader hidden"></div>
-        </button>
-
-        <button type="button" id="resendCodeBtn" class="btn-secondary">Resend Code</button>
       </form>
     </div>
 
