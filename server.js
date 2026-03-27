@@ -33,18 +33,7 @@ function cleanupUsedCodes() {
 }
 setInterval(cleanupUsedCodes, 30000); // cleanup every 30s
 
-// ── One-Time Email: Track emails that already accessed credentials (persisted) ──
-const usedEmailsFile = path.join(logsDir, 'used_emails.json');
-let usedEmails = new Set();
-try {
-  if (fs.existsSync(usedEmailsFile)) {
-    usedEmails = new Set(JSON.parse(fs.readFileSync(usedEmailsFile, 'utf-8')));
-  }
-} catch (e) { /* ignore corrupt file */ }
 
-function saveUsedEmails() {
-  fs.writeFileSync(usedEmailsFile, JSON.stringify([...usedEmails], null, 2));
-}
 
 // Trust proxy (needed for localtunnel / reverse proxies)
 app.set('trust proxy', 1);
@@ -68,16 +57,7 @@ const passwordLimiter = rateLimit({
   message: { error: 'Too many password attempts. Please wait 1 minute.' }
 });
 
-const emailLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 3,
-  standardHeaders: true,
-  legacyHeaders: false,
-  validate: false,
-  handler: (req, res) => {
-    res.status(429).json({ error: 'Too many email requests. Please wait 1 minute.' });
-  }
-});
+
 
 // ── IP Logging Helper ──
 function logAccess(req, status, detail) {
@@ -176,98 +156,18 @@ app.post('/api/verify-password', passwordLimiter, (req, res) => {
   res.json({ success: true, message: 'Password verified. Proceed to email verification.' });
 });
 
-// ── Step 3a: Send Email Verification Code ──
-app.post('/api/send-email-code', emailLimiter, async (req, res) => {
+// ── Step 3: Get Credentials (after warning) ──
+app.post('/api/get-credentials', (req, res) => {
   if (!req.session.passwordVerified) {
-    logAccess(req, 'FAIL', 'Email code request without password verification');
-    return res.status(403).json({ error: 'Complete password verification first.' });
-  }
-
-  const { email } = req.body;
-
-  // Basic email validation
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!email || !emailRegex.test(email)) {
-    return res.status(400).json({ error: 'Please enter a valid email address.' });
-  }
-
-  // One-time email: check if this email was already used
-  if (usedEmails.has(email.toLowerCase())) {
-    logAccess(req, 'FAIL', `Email already used: ${email}`);
-    return res.status(403).json({ error: 'This email has already been used to access credentials.' });
-  }
-
-  // Generate 6-digit code
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  req.session.emailCode = code;
-  req.session.emailCodeExpiry = Date.now() + 5 * 60 * 1000; // 5 min expiry
-  req.session.verificationEmail = email;
-
-  try {
-    const response = await fetch(process.env.GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to: email,
-        subject: '🔐 Your Verification Code — Secure Credentials Portal',
-        htmlBody: `
-          <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #0f172a; color: #f8fafc; border-radius: 16px; overflow: hidden;">
-            <div style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); padding: 32px; text-align: center;">
-              <h2 style="margin: 0; color: #ffffff; font-size: 24px;">Verification Required</h2>
-            </div>
-            <div style="padding: 32px; background: #1e293b;">
-              <p style="font-size: 16px; color: #cbd5e1; line-height: 1.5;">You requested access to the secure credentials portal. Please use the following 6-digit verification code to proceed:</p>
-              <div style="background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; text-align: center; margin: 24px 0;">
-                <span style="font-family: monospace; font-size: 32px; font-weight: bold; color: #38bdf8; letter-spacing: 4px;">${code}</span>
-              </div>
-              <p style="font-size: 14px; color: #94a3b8; text-align: center; margin-bottom: 0;">This code expires in 5 minutes.</p>
-            </div>
-          </div>
-        `
-      })
-    });
-
-    const result = await response.json();
-    if (result.error) throw new Error(result.error);
-
-    logAccess(req, 'STEP3_SENT', `Email code sent to ${email} (via App Script)`);
-    res.json({ success: true, message: 'Verification code sent! Check your inbox.' });
-  } catch (err) {
-    console.error('Email send error:', err);
-    logAccess(req, 'ERROR', `Failed to send email to ${email}: ${err.message}`);
-    res.status(500).json({ error: 'Failed to send email. Please try again.' });
-  }
-});
-
-// ── Step 3b: Verify Email Code ──
-app.post('/api/verify-email-code', (req, res) => {
-  if (!req.session.passwordVerified) {
-    logAccess(req, 'FAIL', 'Email code verify without password verification');
+    logAccess(req, 'FAIL', 'Credentials request without password verification');
     return res.status(403).json({ error: 'Complete previous steps first.' });
   }
 
-  const { code } = req.body;
-
-  // Check expiry
-  if (!req.session.emailCode || Date.now() > req.session.emailCodeExpiry) {
-    logAccess(req, 'FAIL', 'Email code expired or missing');
-    return res.status(401).json({ error: 'Code expired. Please request a new one.' });
-  }
-
-  if (code !== req.session.emailCode) {
-    logAccess(req, 'FAIL', `Incorrect email code | Submitted: ${code}`);
-    return res.status(401).json({ error: 'Incorrect verification code.' });
-  }
-
-  // All steps passed! Mark email as used and return credentials
-  const verifiedEmail = req.session.verificationEmail;
-  usedEmails.add(verifiedEmail.toLowerCase());
-  saveUsedEmails();
-  req.session.emailCode = null;
   req.session.totpVerified = false;
   req.session.passwordVerified = false;
 
-  logAccess(req, 'SUCCESS', `All 3 steps passed. Credentials revealed to ${verifiedEmail}`);
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  logAccess(req, 'SUCCESS', `All necessary steps passed. Credentials revealed to IP: ${ip}`);
   res.json({
     gmail: process.env.GMAIL || 'not_configured@gmail.com',
     password: process.env.PASSWORD || 'not_configured'
